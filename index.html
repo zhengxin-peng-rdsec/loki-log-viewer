@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loki 日志工作台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="loginScreen" class="login-screen">
+      <div class="login-card">
+        <h1>Loki 日志工作台</h1>
+        <label class="field">
+          <span>用户名</span>
+          <input id="loginUserName" autocomplete="username" />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input id="loginPassword" type="password" autocomplete="current-password" />
+        </label>
+        <button id="loginBtn" class="btn primary full">登录</button>
+        <div id="loginError" class="login-error"></div>
+      </div>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar">
+        <button id="toggleSidebarBtn" class="sidebar-toggle" type="button" aria-label="隐藏侧栏">&lt;</button>
+        <div class="brand">
+          <div>
+            <h1>Loki 日志工作台</h1>
+            <p>多源日志查看与实时追踪</p>
+          </div>
+          <span id="connectionState" class="status-pill idle">未连接</span>
+        </div>
+
+        <section class="panel session-panel">
+          <div class="session-area">
+            <div class="session-user">
+              <span class="session-label">登录名：</span>
+              <button id="accountBtn" class="account-button" type="button">
+                <span id="accountName">未登录</span>
+              </button>
+            </div>
+            <button id="logoutBtn" class="btn small">退出</button>
+          </div>
+          <label class="field theme-field">
+            <span>主题</span>
+            <select id="themeMode">
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </label>
+          <div id="sessionConfigRow" class="session-config-row">
+            <button id="openConfigBtn" class="btn small">系统配置</button>
+          </div>
+        </section>
+
+        <section class="panel source-panel">
+          <div class="panel-head">
+            <div class="panel-title">日志源</div>
+            <button id="newSourceBtn" class="btn small">新增</button>
+          </div>
+          <div id="sourceList" class="source-list"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="toolbar">
+          <div id="inlineQueryBuilder" class="inline-query-builder">
+            <div class="kickstart-head">
+              <div class="panel-title">Kick start query</div>
+            </div>
+            <div id="labelConditionList" class="label-filter-list"></div>
+          </div>
+
+          <div id="kickstartDivider" class="kickstart-divider">
+            <button id="toggleKickstartBtn" class="collapse-toggle" type="button" title="折叠 Kick start" aria-label="折叠 Kick start">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 14 6-6 6 6" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="query-block">
+            <label class="field query-field">
+              <span>LogQL</span>
+              <input id="queryInput" spellcheck="false" placeholder='{app="erp"} |= "ERROR"' />
+            </label>
+          </div>
+          <div class="toolbar-grid">
+            <label class="field">
+              <span>时间范围</span>
+              <select id="rangeSelect">
+                <option value="300">最近 5 分钟</option>
+                <option value="900" selected>最近 15 分钟</option>
+                <option value="3600">最近 1 小时</option>
+                <option value="21600">最近 6 小时</option>
+                <option value="86400">最近 24 小时</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>行数</span>
+              <input id="limitInput" type="number" min="20" max="5000" value="500" />
+            </label>
+            <label class="field">
+              <span>方向</span>
+              <select id="directionSelect">
+                <option value="backward" selected>最新优先</option>
+                <option value="forward">最早优先</option>
+              </select>
+            </label>
+          </div>
+          <div class="action-row">
+            <button id="saveQueryBtn" class="btn icon-btn save-query-btn" type="button" title="保存 LogQL" aria-label="保存 LogQL">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 3h12l2 2v16H5z" />
+                <path d="M8 3v6h8V3" />
+                <path d="M8 17h8" />
+              </svg>
+            </button>
+            <button id="queryBtn" class="btn primary">查询</button>
+            <button id="tailBtn" class="btn success">实时</button>
+            <button id="stopTailBtn" class="btn danger" disabled>停止</button>
+            <button id="clearBtn" class="btn">清空</button>
+            <button id="exportBtn" class="btn">导出</button>
+          </div>
+        </header>
+
+        <section class="filters">
+          <label class="field inline">
+            <span>包含</span>
+            <input id="includeFilter" placeholder="关键词或正则" />
+          </label>
+          <label class="field inline">
+            <span>排除</span>
+            <input id="excludeFilter" placeholder="关键词或正则" />
+          </label>
+          <label class="check">
+            <input id="regexFilter" type="checkbox" />
+            <span>正则</span>
+          </label>
+          <label class="check">
+            <input id="caseSensitive" type="checkbox" />
+            <span>大小写敏感</span>
+          </label>
+          <div class="level-filters">
+            <label><input type="checkbox" value="error" checked />ERROR</label>
+            <label><input type="checkbox" value="warn" checked />WARN</label>
+            <label><input type="checkbox" value="info" checked />INFO</label>
+            <label><input type="checkbox" value="debug" checked />DEBUG</label>
+            <label><input type="checkbox" value="other" checked />OTHER</label>
+          </div>
+        </section>
+
+        <section id="viewerCard" class="viewer-card">
+          <div class="viewer-head">
+            <div>
+              <strong id="resultTitle">日志流</strong>
+              <span id="resultMeta">等待查询</span>
+            </div>
+            <div class="viewer-tools">
+              <label class="check">
+                <input id="autoScroll" type="checkbox" checked />
+                <span>自动滚动</span>
+              </label>
+              <label class="check">
+                <input id="wrapLines" type="checkbox" checked />
+                <span>自动换行</span>
+              </label>
+              <button id="toggleLogFullscreenBtn" class="btn small" type="button" aria-pressed="false">全屏</button>
+            </div>
+          </div>
+          <div id="logList" class="log-list"></div>
+        </section>
+      </main>
+
+    </div>
+
+    <div id="configModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="config"></div>
+      <div class="modal-dialog wide">
+        <div class="modal-head">
+          <div>
+            <h2>系统配置</h2>
+            <p>连接、用户和用户组配置</p>
+          </div>
+          <button class="btn small" data-close-modal="config">关闭</button>
+        </div>
+        <div class="tabs">
+          <button class="tab active" data-config-tab="connection">连接</button>
+          <button class="tab" data-config-tab="users">用户</button>
+          <button class="tab" data-config-tab="groups">用户组</button>
+        </div>
+
+        <section id="tabConnection" class="tab-panel active">
+          <div class="split-panel">
+            <div>
+              <div class="panel-title">连接列表</div>
+              <div id="lokiConnectionList" class="managed-list"></div>
+            </div>
+            <div>
+              <div class="panel-title">连接配置</div>
+              <label class="field">
+                <span>名称</span>
+                <input id="lokiName" placeholder="生产 Loki" />
+              </label>
+              <label class="field">
+                <span>Loki 连接地址</span>
+                <input id="lokiUrl" placeholder="http://172.18.10.15:3100" />
+              </label>
+              <label class="field">
+                <span>租户 ID</span>
+                <input id="tenantId" placeholder="可选，X-Scope-OrgID" />
+              </label>
+              <div class="control-row">
+                <button id="newConnectionBtn" class="btn">新增连接</button>
+                <button id="saveSettingsBtn" class="btn primary">保存连接</button>
+                <button id="deleteConnectionBtn" class="btn danger">删除连接</button>
+                <button id="healthBtn" class="btn">测试连接</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tabUsers" class="tab-panel">
+          <div class="split-panel">
+            <div>
+              <div class="panel-head">
+                <div class="panel-title">用户列表</div>
+                <button id="newUserBtn" class="btn small">新增用户</button>
+              </div>
+              <div id="userList" class="managed-list"></div>
+            </div>
+            <div>
+              <div class="panel-title">用户配置</div>
+              <label class="field">
+                <span>用户名</span>
+                <input id="userNameInput" />
+              </label>
+              <label class="field">
+                <span>角色</span>
+                <select id="userRoleInput">
+                  <option value="user">普通用户</option>
+                  <option value="admin">管理员</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>所属用户组</span>
+                <div id="userGroupsInput" class="checkbox-list"></div>
+              </label>
+              <div class="control-row">
+                <button id="saveUserBtn" class="btn primary">保存用户</button>
+                <button id="resetPasswordBtn" class="btn">重置密码</button>
+                <button id="deleteUserBtn" class="btn danger">删除用户</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tabGroups" class="tab-panel">
+          <div class="split-panel">
+            <div>
+              <div class="panel-title">用户组列表</div>
+              <div id="groupList" class="managed-list"></div>
+            </div>
+            <div>
+              <div class="panel-title">用户组配置</div>
+              <label class="field">
+                <span>用户组名称</span>
+                <input id="groupNameInput" />
+              </label>
+              <div class="control-row">
+                <button id="newGroupBtn" class="btn">新增用户组</button>
+                <button id="saveGroupBtn" class="btn primary">保存用户组</button>
+                <button id="deleteGroupBtn" class="btn danger">删除用户组</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="sourceModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="source"></div>
+      <div class="modal-dialog">
+        <div class="modal-head">
+          <div>
+            <h2>日志源配置</h2>
+            <p>仅管理员可新增、编辑、删除和授权</p>
+          </div>
+          <button class="btn small" data-close-modal="source">关闭</button>
+        </div>
+        <label class="field">
+          <span>名称</span>
+          <input id="sourceName" />
+        </label>
+        <label class="field">
+          <span>分组</span>
+          <input id="sourceGroup" />
+        </label>
+        <label class="field">
+          <span>Loki 连接</span>
+          <select id="sourceConnection"></select>
+        </label>
+        <label class="field">
+          <span>默认 LogQL</span>
+          <textarea id="sourceQuery" rows="4" spellcheck="false"></textarea>
+        </label>
+        <div class="panel-title">授权</div>
+        <div id="permissionList" class="permission-list"></div>
+        <div class="control-row">
+          <button id="saveSourceBtn" class="btn primary">保存日志源</button>
+          <button id="deleteSourceBtn" class="btn danger">删除日志源</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="newUserModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="newUser"></div>
+      <div class="modal-dialog user-dialog">
+        <div class="modal-head">
+          <div>
+            <h2>新增用户</h2>
+          </div>
+          <button class="btn small" data-close-modal="newUser">关闭</button>
+        </div>
+        <label class="field">
+          <span>用户名</span>
+          <input id="newUserNameInput" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input id="newUserPasswordInput" type="password" autocomplete="new-password" />
+        </label>
+        <label class="field">
+          <span>角色</span>
+          <select id="newUserRoleInput">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>所属用户组</span>
+          <div id="newUserGroupsInput" class="checkbox-list"></div>
+        </label>
+        <div class="control-row">
+          <button id="createUserBtn" class="btn primary">创建用户</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="resetPasswordModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="resetPassword"></div>
+      <div class="modal-dialog account-dialog">
+        <div class="modal-head">
+          <div>
+            <h2>重置密码</h2>
+            <p id="resetPasswordUserName"></p>
+          </div>
+          <button class="btn small" data-close-modal="resetPassword">关闭</button>
+        </div>
+        <label class="field">
+          <span>新密码</span>
+          <div class="password-field">
+            <input id="resetPasswordInput" type="password" autocomplete="new-password" />
+            <button id="toggleResetPasswordVisibility" class="btn small" type="button">显示</button>
+          </div>
+        </label>
+        <div class="control-row">
+          <button id="saveResetPasswordBtn" class="btn primary">保存密码</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="accountModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="account"></div>
+      <div class="modal-dialog account-dialog profile-password-dialog">
+        <div class="modal-head">
+          <div>
+            <h2>修改密码</h2>
+          </div>
+          <button class="btn small" data-close-modal="account">关闭</button>
+        </div>
+        <label class="field">
+          <span>新密码</span>
+          <input id="accountPassword" type="password" autocomplete="new-password" placeholder="不修改则留空" />
+        </label>
+        <div class="control-row">
+          <button id="saveAccountBtn" class="btn primary">保存密码</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="logDetailModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="detail"></div>
+      <div class="modal-dialog wide">
+        <div class="modal-head">
+          <div>
+            <h2>日志详情</h2>
+            <p>结构化字段、标签和原始日志</p>
+          </div>
+          <button class="btn small" data-close-modal="detail">关闭</button>
+        </div>
+        <pre id="logDetail">点击任意日志行查看结构化详情。</pre>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

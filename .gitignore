@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+
+# Runtime configuration/state. Keep examples in docs instead of committing live data.
+loki-proxy.config.json
+loki-viewer.state.json
+*.tmp
