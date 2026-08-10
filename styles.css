@@ -470,10 +470,21 @@ select[multiple] option {
 
 .toolbar-grid {
   display: grid;
-  grid-template-columns: 150px 100px 126px;
+  grid-template-columns: 150px 170px 170px 120px 100px 126px;
   gap: 8px;
   align-items: center;
   min-width: 0;
+}
+
+.custom-time-field input,
+.batch-interval-field select {
+  min-width: 0;
+}
+
+.batch-query-hint {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 0 0;
 }
 
 #rangeSelect {

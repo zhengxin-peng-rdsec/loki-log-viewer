@@ -1,8 +1,9 @@
 const STORAGE_KEY = "loki-log-viewer-state-v2";
 const LEGACY_STORAGE_KEY = "loki-log-viewer-state-v1";
 const SESSION_USER_KEY = "loki-log-viewer-session-user";
-// Loki 默认 max_entries_limit 通常为 5000；前端不应再额外截断到 2500 条。
+// 单次请求遵守 Loki 的 max_entries_limit；跨时间片的历史结果允许合并更多日志。
 const MAX_ROWS = 5000;
+const MAX_BATCHED_ROWS = 50000;
 const PERMISSION_LEVEL = { none: 0, read: 1, edit: 2 };
 const PROTECTED_USER_IDS = new Set(["admin"]);
 const PROTECTED_GROUPS = new Set(["运维组", "管理员组"]);
@@ -106,6 +107,13 @@ const els = {
   kickstartDivider: document.getElementById("kickstartDivider"),
   toggleKickstartBtn: document.getElementById("toggleKickstartBtn"),
   rangeSelect: document.getElementById("rangeSelect"),
+  customTimeField: document.getElementById("customTimeField"),
+  customTimeEndField: document.getElementById("customTimeEndField"),
+  batchIntervalField: document.getElementById("batchIntervalField"),
+  startTimeInput: document.getElementById("startTimeInput"),
+  endTimeInput: document.getElementById("endTimeInput"),
+  batchIntervalSelect: document.getElementById("batchIntervalSelect"),
+  batchQueryHint: document.getElementById("batchQueryHint"),
   limitInput: document.getElementById("limitInput"),
   directionSelect: document.getElementById("directionSelect"),
   queryBtn: document.getElementById("queryBtn"),
@@ -1549,28 +1557,39 @@ async function queryLogs(options = {}) {
   const connection = await prepareSourceConnection(source);
   if (!isCurrentResult(runVersion, sourceId)) return false;
 
-  const now = Date.now();
-  const rangeSeconds = Number(els.rangeSelect.value);
-  const start = (now - rangeSeconds * 1000) * 1_000_000;
-  const end = now * 1_000_000;
+  const range = queryTimeRange();
+  if (!range) return false;
   const limit = clamp(Number(els.limitInput.value || 500), 20, 5000);
+  const batchSeconds = els.rangeSelect.value === "custom"
+    ? clamp(Number(els.batchIntervalSelect.value || 3600), 60, 86400)
+    : null;
+  const batches = makeQueryBatches(range.startNs, range.endNs, batchSeconds);
 
   setConnection(`查询中 · ${connection?.name || "Loki"}`, "idle");
   els.resultMeta.textContent = "正在加载";
+  els.batchQueryHint.classList.toggle("hidden", batches.length <= 1);
+  if (batches.length > 1) els.batchQueryHint.textContent = `将分 ${batches.length} 个时间片查询，最多合并 ${MAX_BATCHED_ROWS} 行`;
 
   try {
-    const url = buildHttpUrl("/loki/api/v1/query_range", {
-      query,
-      start,
-      end,
-      limit,
-      direction: els.directionSelect.value
-    });
-    const response = await fetch(url, { headers: requestHeaders() });
-    if (!response.ok) throw new Error(`Loki 返回 HTTP ${response.status}`);
-    const payload = await response.json();
+    const allRows = [];
+    for (let index = 0; index < batches.length; index += 1) {
+      const batch = batches[index];
+      const url = buildHttpUrl("/loki/api/v1/query_range", {
+        query,
+        start: batch.startNs,
+        end: batch.endNs,
+        limit,
+        direction: "forward"
+      });
+      const response = await fetch(url, { headers: requestHeaders() });
+      if (!response.ok) throw new Error(`Loki 返回 HTTP ${response.status}`);
+      const payload = await response.json();
+      if (!isCurrentResult(runVersion, sourceId)) return false;
+      allRows.push(...normalizeLokiResult(payload, "forward", MAX_BATCHED_ROWS));
+      if (batches.length > 1) els.resultMeta.textContent = `正在加载第 ${index + 1} / ${batches.length} 个时间片 · 已获取 ${allRows.length} 行`;
+    }
     if (!isCurrentResult(runVersion, sourceId)) return false;
-    logs = normalizeLokiResult(payload);
+    logs = normalizeRows(allRows, els.directionSelect.value, MAX_BATCHED_ROWS);
     selectedLogId = null;
     renderLogs();
     setConnection("已连接", "ok");
@@ -1583,7 +1602,7 @@ async function queryLogs(options = {}) {
   }
 }
 
-function normalizeLokiResult(payload, direction = els.directionSelect.value) {
+function normalizeLokiResult(payload, direction = els.directionSelect.value, maxRows = MAX_ROWS) {
   const rows = [];
   const results = payload?.data?.result || [];
   results.forEach(stream => {
@@ -1592,9 +1611,50 @@ function normalizeLokiResult(payload, direction = els.directionSelect.value) {
       rows.push(makeLogRow(value[0], value[1], stream.stream || {}, label));
     });
   });
-  rows.sort((a, b) => Number(a.tsNs - b.tsNs));
-  if (direction === "backward") rows.reverse();
-  return rows.slice(0, MAX_ROWS);
+  return normalizeRows(rows, direction, maxRows);
+}
+
+function normalizeRows(rows, direction = els.directionSelect.value, maxRows = MAX_ROWS) {
+  const unique = new Map();
+  rows.forEach(row => {
+    const stream = JSON.stringify(row.labels || {});
+    unique.set(`${stream}|${row.tsNs}|${row.raw}`, row);
+  });
+  const normalized = Array.from(unique.values()).sort((a, b) => Number(a.tsNs - b.tsNs));
+  if (direction === "backward") normalized.reverse();
+  return normalized.slice(0, maxRows);
+}
+
+function queryTimeRange() {
+  if (els.rangeSelect.value === "custom") {
+    const startMs = Date.parse(els.startTimeInput.value);
+    const endMs = Date.parse(els.endTimeInput.value);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      showDetail({ error: "自定义时间范围无效", hint: "请填写开始时间和结束时间，并确保结束时间晚于开始时间。" });
+      return null;
+    }
+    return { startNs: String(Math.trunc(startMs * 1_000_000)), endNs: String(Math.trunc(endMs * 1_000_000)) };
+  }
+  const endMs = Date.now();
+  const startMs = endMs - Number(els.rangeSelect.value) * 1000;
+  return { startNs: String(Math.trunc(startMs * 1_000_000)), endNs: String(Math.trunc(endMs * 1_000_000)) };
+}
+
+function makeQueryBatches(startNs, endNs, batchSeconds) {
+  if (!batchSeconds) return [{ startNs, endNs }];
+  const step = BigInt(Math.trunc(batchSeconds * 1_000_000_000));
+  const start = BigInt(startNs);
+  const end = BigInt(endNs);
+  const batches = [];
+  for (let cursor = start; cursor < end; cursor += step) {
+    batches.push({ startNs: cursor.toString(), endNs: (cursor + step < end ? cursor + step : end).toString() });
+  }
+  return batches;
+}
+
+function updateTimeRangeControls() {
+  const custom = els.rangeSelect.value === "custom";
+  [els.customTimeField, els.customTimeEndField, els.batchIntervalField].forEach(item => item.classList.toggle("hidden", !custom));
 }
 
 function makeLogRow(tsNsRaw, line, labels, source) {
@@ -2009,7 +2069,10 @@ function bindEvents() {
   els.saveGroupBtn.addEventListener("click", saveGroup);
   els.deleteGroupBtn.addEventListener("click", deleteGroup);
   els.queryBtn.addEventListener("click", queryLogs);
-  els.rangeSelect.addEventListener("change", refreshLabelValueCache);
+  els.rangeSelect.addEventListener("change", () => {
+    updateTimeRangeControls();
+    refreshLabelValueCache();
+  });
   els.tailBtn.addEventListener("click", startTail);
   els.stopTailBtn.addEventListener("click", stopTail);
   els.clearBtn.addEventListener("click", clearLogs);
@@ -2024,6 +2087,7 @@ async function init() {
   initializeRuntimeState(await loadState());
   if (shouldSeedServerState) saveState();
   bindEvents();
+  updateTimeRangeControls();
   bindSystemThemeSync();
   applyTheme();
   await loadServerConfig();
