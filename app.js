@@ -107,12 +107,12 @@ const els = {
   kickstartDivider: document.getElementById("kickstartDivider"),
   toggleKickstartBtn: document.getElementById("toggleKickstartBtn"),
   rangeSelect: document.getElementById("rangeSelect"),
-  customTimeField: document.getElementById("customTimeField"),
-  customTimeEndField: document.getElementById("customTimeEndField"),
-  batchIntervalField: document.getElementById("batchIntervalField"),
+  customTimePanel: document.getElementById("customTimePanel"),
   startTimeInput: document.getElementById("startTimeInput"),
   endTimeInput: document.getElementById("endTimeInput"),
   batchIntervalSelect: document.getElementById("batchIntervalSelect"),
+  confirmTimeBtn: document.getElementById("confirmTimeBtn"),
+  customTimeStatus: document.getElementById("customTimeStatus"),
   batchQueryHint: document.getElementById("batchQueryHint"),
   limitInput: document.getElementById("limitInput"),
   directionSelect: document.getElementById("directionSelect"),
@@ -187,6 +187,7 @@ let resultVersion = 0;
 let toastTimer = null;
 let stateSaveTimer = null;
 let shouldSeedServerState = false;
+let confirmedCustomRange = null;
 let queryBuilderState = {
   labelsLoaded: false,
   connectionId: "",
@@ -1561,7 +1562,7 @@ async function queryLogs(options = {}) {
   if (!range) return false;
   const limit = clamp(Number(els.limitInput.value || 500), 20, 5000);
   const batchSeconds = els.rangeSelect.value === "custom"
-    ? clamp(Number(els.batchIntervalSelect.value || 3600), 60, 86400)
+    ? confirmedCustomRange.batchSeconds
     : null;
   const batches = makeQueryBatches(range.startNs, range.endNs, batchSeconds);
 
@@ -1627,13 +1628,11 @@ function normalizeRows(rows, direction = els.directionSelect.value, maxRows = MA
 
 function queryTimeRange() {
   if (els.rangeSelect.value === "custom") {
-    const startMs = Date.parse(els.startTimeInput.value);
-    const endMs = Date.parse(els.endTimeInput.value);
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-      showDetail({ error: "自定义时间范围无效", hint: "请填写开始时间和结束时间，并确保结束时间晚于开始时间。" });
+    if (!confirmedCustomRange) {
+      showDetail({ error: "尚未确认自定义时间", hint: "请选择开始时间和结束时间，然后点击“确定时间”。" });
       return null;
     }
-    return { startNs: String(Math.trunc(startMs * 1_000_000)), endNs: String(Math.trunc(endMs * 1_000_000)) };
+    return { startNs: confirmedCustomRange.startNs, endNs: confirmedCustomRange.endNs };
   }
   const endMs = Date.now();
   const startMs = endMs - Number(els.rangeSelect.value) * 1000;
@@ -1654,7 +1653,52 @@ function makeQueryBatches(startNs, endNs, batchSeconds) {
 
 function updateTimeRangeControls() {
   const custom = els.rangeSelect.value === "custom";
-  [els.customTimeField, els.customTimeEndField, els.batchIntervalField].forEach(item => item.classList.toggle("hidden", !custom));
+  els.customTimePanel.classList.toggle("hidden", !custom);
+  if (custom && !els.startTimeInput.value && !els.endTimeInput.value) setDefaultCustomTime();
+}
+
+function setDefaultCustomTime() {
+  const end = new Date();
+  end.setMilliseconds(0);
+  const start = new Date(end.getTime() - 60 * 60 * 1000);
+  els.startTimeInput.value = formatDateTimeLocal(start);
+  els.endTimeInput.value = formatDateTimeLocal(end);
+  invalidateCustomTime();
+}
+
+function confirmCustomTime() {
+  const startMs = Date.parse(els.startTimeInput.value);
+  const endMs = Date.parse(els.endTimeInput.value);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    confirmedCustomRange = null;
+    els.customTimeStatus.textContent = "时间无效，请检查起止时间";
+    els.customTimeStatus.classList.remove("confirmed");
+    showDetail({ error: "自定义时间范围无效", hint: "请确保结束时间晚于开始时间。" });
+    return;
+  }
+  confirmedCustomRange = {
+    startNs: String(Math.trunc(startMs * 1_000_000)),
+    endNs: String(Math.trunc(endMs * 1_000_000)),
+    batchSeconds: clamp(Number(els.batchIntervalSelect.value || 3600), 60, 86400)
+  };
+  els.customTimeStatus.textContent = `已确定：${formatTimeRangeLabel(startMs, endMs)}`;
+  els.customTimeStatus.classList.add("confirmed");
+}
+
+function invalidateCustomTime() {
+  confirmedCustomRange = null;
+  els.customTimeStatus.textContent = "时间已修改，请点击确定时间";
+  els.customTimeStatus.classList.remove("confirmed");
+}
+
+function formatDateTimeLocal(date) {
+  const pad = value => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function formatTimeRangeLabel(startMs, endMs) {
+  const format = value => formatTime(new Date(value)).replace(/\.\d{3}$/, "");
+  return `${format(startMs)} 至 ${format(endMs)}`;
 }
 
 function makeLogRow(tsNsRaw, line, labels, source) {
@@ -2073,6 +2117,9 @@ function bindEvents() {
     updateTimeRangeControls();
     refreshLabelValueCache();
   });
+  [els.startTimeInput, els.endTimeInput, els.batchIntervalSelect]
+    .forEach(input => input.addEventListener("input", invalidateCustomTime));
+  els.confirmTimeBtn.addEventListener("click", confirmCustomTime);
   els.tailBtn.addEventListener("click", startTail);
   els.stopTailBtn.addEventListener("click", stopTail);
   els.clearBtn.addEventListener("click", clearLogs);

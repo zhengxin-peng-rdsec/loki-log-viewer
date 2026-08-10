@@ -470,15 +470,51 @@ select[multiple] option {
 
 .toolbar-grid {
   display: grid;
-  grid-template-columns: 150px 170px 170px 120px 100px 126px;
+  grid-template-columns: minmax(150px, 1fr) minmax(110px, 140px) minmax(126px, 160px);
   gap: 8px;
   align-items: center;
   min-width: 0;
 }
 
-.custom-time-field input,
-.batch-interval-field select {
+.custom-time-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(120px, 150px) auto minmax(160px, auto);
+  gap: 8px;
+  align-items: end;
   min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+}
+
+.custom-time-panel.hidden {
+  display: none;
+}
+
+.custom-time-panel .field,
+.custom-time-panel input,
+.custom-time-panel select {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.confirm-time-btn {
+  height: 36px;
+}
+
+.custom-time-status {
+  align-self: center;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.custom-time-status.confirmed {
+  color: var(--success);
 }
 
 .batch-query-hint {
@@ -493,6 +529,27 @@ select[multiple] option {
 
 #limitInput {
   min-width: 66px;
+}
+
+@media (max-width: 1100px) {
+  .custom-time-panel {
+    grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr) minmax(120px, 150px) auto;
+  }
+
+  .custom-time-status {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .toolbar-grid,
+  .custom-time-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .custom-time-status {
+    grid-column: auto;
+  }
 }
 
 .filters {

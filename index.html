@@ -101,23 +101,6 @@
                 <option value="custom">自定义时间</option>
               </select>
             </label>
-            <label class="field custom-time-field hidden" id="customTimeField">
-              <span>开始时间</span>
-              <input id="startTimeInput" type="datetime-local" step="1" />
-            </label>
-            <label class="field custom-time-field hidden" id="customTimeEndField">
-              <span>结束时间</span>
-              <input id="endTimeInput" type="datetime-local" step="1" />
-            </label>
-            <label class="field batch-interval-field hidden" id="batchIntervalField">
-              <span>批次间隔</span>
-              <select id="batchIntervalSelect">
-                <option value="900">15 分钟</option>
-                <option value="3600" selected>1 小时</option>
-                <option value="21600">6 小时</option>
-                <option value="86400">24 小时</option>
-              </select>
-            </label>
             <label class="field">
               <span>行数/批次</span>
               <input id="limitInput" type="number" min="20" max="5000" value="500" />
@@ -129,6 +112,27 @@
                 <option value="forward">最早优先</option>
               </select>
             </label>
+          </div>
+          <div id="customTimePanel" class="custom-time-panel hidden">
+            <label class="field">
+              <span>开始时间</span>
+              <input id="startTimeInput" type="datetime-local" step="1" />
+            </label>
+            <label class="field">
+              <span>结束时间</span>
+              <input id="endTimeInput" type="datetime-local" step="1" />
+            </label>
+            <label class="field">
+              <span>批次间隔</span>
+              <select id="batchIntervalSelect">
+                <option value="900">15 分钟</option>
+                <option value="3600" selected>1 小时</option>
+                <option value="21600">6 小时</option>
+                <option value="86400">24 小时</option>
+              </select>
+            </label>
+            <button id="confirmTimeBtn" class="btn primary confirm-time-btn" type="button">确定时间</button>
+            <span id="customTimeStatus" class="custom-time-status">请选择时间后点击确定</span>
           </div>
           <div id="batchQueryHint" class="batch-query-hint hidden"></div>
           <div class="action-row">
