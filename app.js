@@ -1,7 +1,8 @@
 const STORAGE_KEY = "loki-log-viewer-state-v2";
 const LEGACY_STORAGE_KEY = "loki-log-viewer-state-v1";
 const SESSION_USER_KEY = "loki-log-viewer-session-user";
-const MAX_ROWS = 2500;
+// Loki 默认 max_entries_limit 通常为 5000；前端不应再额外截断到 2500 条。
+const MAX_ROWS = 5000;
 const PERMISSION_LEVEL = { none: 0, read: 1, edit: 2 };
 const PROTECTED_USER_IDS = new Set(["admin"]);
 const PROTECTED_GROUPS = new Set(["运维组", "管理员组"]);
